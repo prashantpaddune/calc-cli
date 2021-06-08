@@ -123,6 +123,15 @@ const truncate = (s, l) => {
 
 const execute = cmd => {
   switch (cmd) {
+    case 'func':
+      keys.filter(k => (buf[k] instanceof Function) && (buf[k].syntax == null))
+          .forEach(k => console.log(`${k} = ${buf[k].toString()}\n`));
+      const udf = keys.filter(k => (buf[k] instanceof Function) && (buf[k].syntax != null));
+      if (udf.length > 0) {
+        console.log('User Defined Function:\n');
+        udf.forEach(k => console.log(`${buf[k].source}\n`));
+      }
+      break;
     case 'exit':
       reader.close();
       break;
@@ -138,13 +147,13 @@ const assign = (n, t, v) => {
     let c = n[i].getContent();
     if (typeof(c.args) == 'undefined') {
       if (typeof(c.value) == 'undefined') {
-        if (n[i].name === t) {
+        if (n[i].name == t) {
           n[i] = v;
         }
       }
       else {
         while (typeof(c.value) != 'undefined') {
-          if ((c.value.name === t) && (typeof(c.value.value) == 'undefined')) {
+          if ((c.value.name == t) && (typeof(c.value.value) == 'undefined')) {
             c.value = v
           }
           else {
@@ -221,6 +230,14 @@ reader.on('line', l => {
   if (l.length > 0) {
     try {
       let exp = l.replace(/@/gi, '__at__');
+
+      if (parser.scope['__at__'] != null) {
+        // regexp error occur if top of list is '+'
+        if (exp.match(/^(?:[-+\*\/\^\|&]|(?:<<)|(?:>>))/)) {
+          exp = '__at__' + exp;
+        }
+      }
+
       exp = parseSIUnit(parseBin(parseHex(exp)));
       let buf = [];
       buf[0] = math.parse(exp);
@@ -233,7 +250,16 @@ reader.on('line', l => {
       });
       let node = buf[0];
 
-      if (Object.keys(node).toString() === ['name', 'comment'].toString()) {
+      if (node.name == '__at__' && node.value != null) {
+        if (node instanceof math.Node) {
+          throw new Error('Can not overwrite \'@\'');
+        }
+      }
+      if (parser.scope['__at__'] == null && exp.includes('__at__')) {
+        throw new Error('\'@\' is empty yet');
+      }
+
+      if (Object.keys(node).toString() == ['name', 'comment'].toString()) {
         reader.history.shift();
         execute(l);
       }
@@ -253,5 +279,5 @@ reader.on('line', l => {
   if (process.stdin.isTTY) {
     reader.prompt();
   }
-})
+});
 
